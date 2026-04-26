@@ -269,11 +269,34 @@ def scan_repository(
 
     head_sha = repo.head.commit.hexsha
 
+    def _resolve(ref_name: str):
+        """Resolve a branch name, falling back to origin/<name> for cloned repos."""
+        for candidate in (ref_name, f"origin/{ref_name}"):
+            try:
+                return repo.commit(candidate)
+            except (git.BadName, git.BadObject, ValueError):
+                continue
+        raise ValueError(f"Ref '{ref_name}' did not resolve to an object")
+
+    def _iter(ref_name: str):
+        """iter_commits with remote-ref fallback."""
+        for candidate in (ref_name, f"origin/{ref_name}"):
+            try:
+                return repo.iter_commits(candidate)
+            except (git.BadName, git.GitCommandError, ValueError):
+                continue
+        raise ValueError(f"Ref '{ref_name}' did not resolve to an object")
+
     if branch == "all":
-        # Deduplicate commits across all local branches
+        # Deduplicate commits across all remote-tracking branches
         seen_shas: set[str] = set()
         commits: list = []
-        for ref in repo.branches:
+        refs = []
+        try:
+            refs = list(repo.remote("origin").refs)
+        except Exception:
+            refs = list(repo.branches)
+        for ref in refs:
             for c in repo.iter_commits(ref):
                 if c.hexsha not in seen_shas:
                     seen_shas.add(c.hexsha)
@@ -281,16 +304,20 @@ def scan_repository(
     else:
         ref = branch if branch else "HEAD"
         if depth == "all":
-            commits = list(repo.iter_commits(ref))
+            commits = list(_iter(ref))
         elif depth == "incremental" and since_commit:
             try:
                 commits = list(repo.iter_commits(f"{since_commit}..{ref}"))
-            except git.GitCommandError:
-                commits = [repo.commit(ref)]
+            except (git.GitCommandError, ValueError):
+                try:
+                    commits = list(repo.iter_commits(f"{since_commit}..origin/{ref}"))
+                except Exception:
+                    commits = [_resolve(ref)]
         elif depth.isdigit():
-            commits = list(repo.iter_commits(ref, max_count=int(depth)))
+            ref_commit = _resolve(ref)
+            commits = list(repo.iter_commits(ref_commit, max_count=int(depth)))
         else:
-            commits = [repo.commit(ref)]
+            commits = [_resolve(ref)]
 
     all_findings: list[RawFinding] = []
     scanned_shas: list[str] = []

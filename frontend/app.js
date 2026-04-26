@@ -138,10 +138,6 @@ async function loadRepos() {
         </td>
         <td class="py-3 pr-4 text-slate-500 text-xs">${fmtDate(r.created_at)}</td>
         <td class="py-3 pr-4">
-          <input id="branch-${r.id}" type="text" placeholder="HEAD" title="Branch name or 'all'"
-            class="w-24 bg-slate-900 border border-slate-700 rounded text-xs text-slate-300 px-2 py-1 mono focus:outline-none focus:border-sky-500" />
-        </td>
-        <td class="py-3 pr-4">
           <select id="depth-${r.id}" class="bg-slate-900 border border-slate-700 rounded text-xs text-slate-300 px-2 py-1 focus:outline-none focus:border-sky-500">
             <option value="latest">Latest commit</option>
             <option value="incremental">Since last scan</option>
@@ -207,10 +203,8 @@ async function submitAddRepo() {
 }
 
 async function triggerScan(repoId) {
-  const depth  = document.getElementById(`depth-${repoId}`)?.value || 'latest';
-  const branch = document.getElementById(`branch-${repoId}`)?.value.trim() || '';
-  let qs = `?depth=${depth}`;
-  if (branch) qs += `&branch=${encodeURIComponent(branch)}`;
+  const depth = document.getElementById(`depth-${repoId}`)?.value || 'latest';
+  const qs = `?depth=${depth}&branch=all`;
   try {
     const { scan_id } = await apiFetch(`/repos/${repoId}/scan${qs}`, { method: 'POST' });
     toast(`Scan #${scan_id} started.`);
@@ -361,8 +355,11 @@ function renderFinding(f) {
       </div>
       <div class="text-sm text-slate-300 mb-1">
         <span class="text-slate-400">File:</span>
-        <span class="mono text-sky-300">${esc(f.file_path)}</span>
-        ${f.line_number ? `<span class="text-slate-500">:${f.line_number}</span>` : ''}
+        ${f.remote_url && f.commit_hash
+          ? `<a href="${esc(f.remote_url)}/blob/${f.commit_hash}/${esc(f.file_path)}${f.line_number ? '#L' + f.line_number : ''}"
+               target="_blank" class="mono text-sky-300 hover:underline">${esc(f.file_path)}</a>`
+          : `<span class="mono text-sky-300">${esc(f.file_path)}</span>`}
+        ${f.line_number && !f.remote_url ? `<span class="text-slate-500">:${f.line_number}</span>` : ''}
       </div>
       ${f.matched_value_masked ? `
       <div class="text-sm mb-1">

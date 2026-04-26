@@ -32,7 +32,7 @@ def monitor_repos():
             db.commit()
             db.refresh(scan)
             # Run inline (scheduler thread is fine for short scans)
-            run_scan(scan.id, repo.path, repo.last_scanned_commit, repo.remote_url, depth="incremental")
+            run_scan(scan.id, repo.path, repo.last_scanned_commit, repo.remote_url, depth="incremental", branch="all")
     finally:
         db.close()
 

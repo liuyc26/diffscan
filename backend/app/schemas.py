@@ -66,6 +66,7 @@ class FindingOut(BaseModel):
     resolved_at: Optional[datetime]
     created_at: datetime
     repo_name: Optional[str] = None
+    remote_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

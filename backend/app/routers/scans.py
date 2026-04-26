@@ -125,5 +125,6 @@ def get_scan_findings(scan_id: int, show_resolved: bool = False, db: Session = D
     for f in q.order_by(Finding.id).all():
         out = FindingOut.model_validate(f)
         out.repo_name = repo.name if repo else None
+        out.remote_url = repo.remote_url if repo else None
         results.append(out)
     return results

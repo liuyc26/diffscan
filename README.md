@@ -2,7 +2,7 @@
 
 A lightweight secret and token scanner for git repositories. Scans commit diffs for leaked API keys, credentials, private keys, and other sensitive values.
 
-![diffscan screenshot](https://raw.githubusercontent.com/your-username/diffscan/main/docs/screenshot.png)
+![diffscan screenshot](https://raw.githubusercontent.com/liuyc26/diffscan/main/docs/screenshot.png)
 
 ## Features
 

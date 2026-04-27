@@ -38,6 +38,8 @@ class ScanOut(BaseModel):
     id: int
     repo_id: int
     status: str
+    commits_total: int = 0
+    commits_done: int = 0
     commits_scanned: int
     findings_count: int
     error_message: Optional[str]

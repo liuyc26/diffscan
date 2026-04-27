@@ -47,6 +47,8 @@ def _migrate():
         for stmt in [
             "ALTER TABLE findings ADD COLUMN resolved BOOLEAN DEFAULT FALSE",
             "ALTER TABLE findings ADD COLUMN resolved_at DATETIME",
+            "ALTER TABLE scans ADD COLUMN commits_total INTEGER DEFAULT 0",
+            "ALTER TABLE scans ADD COLUMN commits_done INTEGER DEFAULT 0",
         ]:
             try:
                 conn.execute(text(stmt))

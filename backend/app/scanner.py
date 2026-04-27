@@ -127,6 +127,10 @@ def _high_entropy_tokens(line: str) -> list[str]:
     candidates += re.findall(r"(?<![A-Za-z0-9])([a-f0-9]{32,64})(?![A-Za-z0-9])", line)
     for token in candidates:
         chars = set(token)
+        # Skip strings that are mostly consecutive ASCII (e.g. ABCDEFG..., 0123456789...)
+        ascending = sum(1 for a, b in zip(token, token[1:]) if ord(b) - ord(a) == 1)
+        if ascending > len(token) * 0.4:
+            continue
         if chars.issubset(_HEX_CHARS) and _shannon_entropy(token) > 3.5:
             found.append(token)
         elif chars.issubset(_B64_CHARS) and _shannon_entropy(token) > 4.5:
@@ -253,6 +257,7 @@ def scan_repository(
     since_commit: Optional[str] = None,
     depth: str = "latest",
     branch: str = "",
+    progress_callback=None,
 ) -> tuple[list[RawFinding], list[str], str]:
     """
     Scan a git repository for secrets.
@@ -288,19 +293,39 @@ def scan_repository(
         raise ValueError(f"Ref '{ref_name}' did not resolve to an object")
 
     if branch == "all":
-        # Deduplicate commits across all remote-tracking branches
         seen_shas: set[str] = set()
         commits: list = []
-        refs = []
         try:
             refs = list(repo.remote("origin").refs)
         except Exception:
             refs = list(repo.branches)
         for ref in refs:
-            for c in repo.iter_commits(ref):
-                if c.hexsha not in seen_shas:
-                    seen_shas.add(c.hexsha)
-                    commits.append(c)
+            if depth == "latest":
+                try:
+                    c = repo.commit(ref)
+                    if c.hexsha not in seen_shas:
+                        seen_shas.add(c.hexsha)
+                        commits.append(c)
+                except Exception:
+                    pass
+            elif depth == "incremental" and since_commit:
+                try:
+                    for c in repo.iter_commits(f"{since_commit}..{ref}"):
+                        if c.hexsha not in seen_shas:
+                            seen_shas.add(c.hexsha)
+                            commits.append(c)
+                except Exception:
+                    pass
+            elif depth.isdigit():
+                for c in repo.iter_commits(ref, max_count=int(depth)):
+                    if c.hexsha not in seen_shas:
+                        seen_shas.add(c.hexsha)
+                        commits.append(c)
+            else:  # "all"
+                for c in repo.iter_commits(ref):
+                    if c.hexsha not in seen_shas:
+                        seen_shas.add(c.hexsha)
+                        commits.append(c)
     else:
         ref = branch if branch else "HEAD"
         if depth == "all":
@@ -321,8 +346,11 @@ def scan_repository(
 
     all_findings: list[RawFinding] = []
     scanned_shas: list[str] = []
+    total = len(commits)
+    if progress_callback:
+        progress_callback(0, total)
 
-    for commit in commits:
+    for i, commit in enumerate(commits):
         scanned_shas.append(commit.hexsha)
         if commit.parents:
             diffs = commit.parents[0].diff(commit, create_patch=True)
@@ -353,5 +381,8 @@ def scan_repository(
                 finding_with_meta.__dict__["commit_message"] = (commit.message or "").strip()[:500]
                 finding_with_meta.__dict__["author"] = str(commit.author)
                 all_findings.append(finding_with_meta)
+
+        if progress_callback:
+            progress_callback(i + 1, total)
 
     return all_findings, scanned_shas, head_sha

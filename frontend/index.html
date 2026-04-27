@@ -21,7 +21,6 @@
   </script>
   <style>
     body { background: #0f172a; color: #e2e8f0; }
-    .tab-active { border-bottom: 2px solid #38bdf8; color: #38bdf8; }
     .severity-critical { background: #7f1d1d; color: #fca5a5; }
     .severity-high     { background: #7c2d12; color: #fdba74; }
     .severity-medium   { background: #713f12; color: #fde047; }
@@ -33,8 +32,6 @@
     .mono { font-family: 'Menlo', 'Consolas', monospace; font-size: 0.8rem; }
     .spinner { animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .slide-in { animation: slideIn 0.15s ease; }
-    @keyframes slideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   </style>
 </head>
 <body class="min-h-screen">
@@ -47,7 +44,6 @@
   </svg>
   <h1 class="text-xl font-bold text-white tracking-tight">diffscan</h1>
   <span class="text-slate-500 text-sm ml-1">secret & leak detector</span>
-
   <div class="ml-auto flex items-center gap-4 text-sm text-slate-400">
     <span id="stat-repos">— repos</span>
     <span id="stat-scans">— scans</span>
@@ -55,7 +51,7 @@
   </div>
 </header>
 
-<!-- Stats bar -->
+<!-- Severity summary bar -->
 <div id="stats-bar" class="hidden px-6 py-3 bg-slate-800/50 border-b border-slate-700 flex gap-6 text-sm">
   <span>Critical: <b id="cnt-critical" class="text-red-400">0</b></span>
   <span>High: <b id="cnt-high" class="text-orange-400">0</b></span>
@@ -63,18 +59,11 @@
   <span>Low: <b id="cnt-low" class="text-green-400">0</b></span>
 </div>
 
-<!-- Tabs -->
-<nav class="px-6 flex gap-1 border-b border-slate-700">
-  <button onclick="switchTab('repos')" id="tab-repos" class="tab px-4 py-3 text-sm font-medium text-slate-400 hover:text-white transition-colors">Repositories</button>
-  <button onclick="switchTab('scans')" id="tab-scans" class="tab px-4 py-3 text-sm font-medium text-slate-400 hover:text-white transition-colors">Scans</button>
-</nav>
+<main class="px-6 py-6 max-w-7xl mx-auto space-y-10">
 
-<!-- Content -->
-<main class="px-6 py-6 max-w-7xl mx-auto">
-
-  <!-- REPOS TAB -->
-  <div id="pane-repos" class="hidden slide-in">
-    <div class="flex items-center gap-3 mb-5">
+  <!-- Add repo -->
+  <div>
+    <div class="flex items-center gap-3">
       <input id="repo-source" type="text"
         placeholder="Local path or GitHub URL — press Enter to add"
         class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-sm mono focus:outline-none focus:border-sky-500 placeholder-slate-500"
@@ -84,8 +73,11 @@
         Add
       </button>
     </div>
-    <div id="add-repo-error" class="hidden mb-3 text-red-400 text-sm"></div>
+    <div id="add-repo-error" class="hidden mt-2 text-red-400 text-sm"></div>
+  </div>
 
+  <!-- Repositories -->
+  <div>
     <div id="repos-loading" class="text-slate-500 text-sm py-8 text-center">Loading…</div>
     <div id="repos-empty" class="hidden text-slate-500 text-sm py-12 text-center">
       No repositories yet. Add one to start scanning.
@@ -94,12 +86,11 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-slate-400 border-b border-slate-700">
-            <th class="pb-3 pr-4">Name</th>
-            <th class="pb-3 pr-4">Source</th>
-            <th class="pb-3 pr-4">Monitor</th>
-            <th class="pb-3 pr-4">Last Commit</th>
-            <th class="pb-3 pr-4">Added</th>
-            <th class="pb-3 pr-4">Depth</th>
+            <th class="pb-3 pr-6">Name</th>
+            <th class="pb-3 pr-6">Source</th>
+            <th class="pb-3 pr-6">Monitor</th>
+            <th class="pb-3 pr-6">Last Scan</th>
+            <th class="pb-3 pr-6">Depth</th>
             <th class="pb-3">Actions</th>
           </tr>
         </thead>
@@ -108,24 +99,23 @@
     </div>
   </div>
 
-  <!-- SCANS TAB -->
-  <div id="pane-scans" class="hidden slide-in">
+  <!-- Scan history -->
+  <div>
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold">Scan History</h2>
-      <button onclick="loadScans()" class="text-slate-400 hover:text-white text-sm px-3 py-1.5 rounded border border-slate-600 hover:border-slate-400 transition-colors">
+      <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest">Scan History</h2>
+      <button onclick="loadScans()" class="text-slate-500 hover:text-white text-xs px-2 py-1 rounded border border-slate-700 hover:border-slate-500 transition-colors">
         ↻ Refresh
       </button>
     </div>
-    <div id="scans-loading" class="text-slate-500 text-sm py-8 text-center">Loading…</div>
-    <div id="scans-empty" class="hidden text-slate-500 text-sm py-12 text-center">No scans yet.</div>
+    <div id="scans-loading" class="hidden text-slate-500 text-sm py-4 text-center">Loading…</div>
+    <div id="scans-empty" class="hidden text-slate-500 text-sm py-4 text-center">No scans yet.</div>
     <div id="scans-table" class="hidden overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
           <tr class="text-left text-slate-400 border-b border-slate-700">
-            <th class="pb-3 pr-4">ID</th>
+            <th class="pb-3 pr-4">#</th>
             <th class="pb-3 pr-4">Repository</th>
             <th class="pb-3 pr-4">Status</th>
-            <th class="pb-3 pr-4">Commits</th>
             <th class="pb-3 pr-4">Findings</th>
             <th class="pb-3 pr-4">Started</th>
             <th class="pb-3">Duration</th>
@@ -135,7 +125,6 @@
       </table>
     </div>
   </div>
-
 
 </main>
 
@@ -148,7 +137,6 @@
   <div id="findings-panel-inner"
     class="absolute right-0 top-0 h-full w-[700px] max-w-full bg-slate-900 border-l border-slate-700 flex flex-col"
     style="transform: translateX(100%); transition: transform 0.2s ease">
-    <!-- Panel header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-700 flex-shrink-0">
       <div>
         <h3 id="panel-title" class="font-semibold text-white"></h3>
@@ -162,7 +150,8 @@
         <button onclick="closeFindingsPanel()" class="text-slate-400 hover:text-white text-xl leading-none px-1">×</button>
       </div>
     </div>
-    <!-- Panel body -->
+    <!-- Severity filters -->
+    <div id="panel-filters" class="hidden px-6 py-2 border-b border-slate-700 flex gap-1 flex-shrink-0"></div>
     <div id="panel-body" class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
       <div id="panel-loading" class="text-slate-500 text-sm py-8 text-center">Loading…</div>
       <div id="panel-empty" class="hidden text-slate-500 text-sm py-12 text-center">No findings for this scan.</div>

@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 import git
@@ -13,11 +13,13 @@ router = APIRouter(prefix="/scans", tags=["scans"])
 
 
 def _prepare_repo(remote_url: str, local_path: str) -> None:
-    """Clone if not present, pull if already cloned."""
+    """Clone if not present; fetch + reset if already cloned (handles force-pushes)."""
     os.makedirs(os.path.dirname(local_path), exist_ok=True)
     if os.path.isdir(os.path.join(local_path, ".git")):
         r = git.Repo(local_path)
-        r.remotes.origin.pull()
+        r.remotes.origin.fetch(prune=True)
+        default = r.remotes.origin.refs[0].remote_head
+        r.git.reset("--hard", f"origin/{default}")
     else:
         os.makedirs(local_path, exist_ok=True)
         git.Repo.clone_from(remote_url, local_path)
@@ -32,13 +34,19 @@ def run_scan(scan_id: int, repo_path: str, since_commit: str | None, remote_url:
             return
 
         scan.status = "running"
-        scan.started_at = datetime.utcnow()
+        scan.started_at = datetime.now(timezone.utc)
         db.commit()
 
         if remote_url:
             _prepare_repo(remote_url, repo_path)
 
-        raw_findings, scanned_shas, head_sha = scan_repository(repo_path, since_commit, depth, branch)
+        def _progress(done: int, total: int) -> None:
+            scan.commits_total = total
+            scan.commits_done = done
+            if done % 10 == 0 or done == total:
+                db.commit()
+
+        raw_findings, scanned_shas, head_sha = scan_repository(repo_path, since_commit, depth, branch, _progress)
 
         for rf in raw_findings:
             masked_val = mask_value(rf.matched_value)
@@ -61,7 +69,7 @@ def run_scan(scan_id: int, repo_path: str, since_commit: str | None, remote_url:
         scan.commits_scanned = len(scanned_shas)
         scan.findings_count = len(raw_findings)
         scan.status = "completed"
-        scan.completed_at = datetime.utcnow()
+        scan.completed_at = datetime.now(timezone.utc)
         db.commit()
 
         # Update repo's last scanned commit
@@ -77,7 +85,7 @@ def run_scan(scan_id: int, repo_path: str, since_commit: str | None, remote_url:
             if scan:
                 scan.status = "failed"
                 scan.error_message = str(e)[:1000]
-                scan.completed_at = datetime.utcnow()
+                scan.completed_at = datetime.now(timezone.utc)
                 db.commit()
         except Exception:
             pass

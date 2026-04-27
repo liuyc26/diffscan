@@ -29,6 +29,8 @@ class Scan(Base):
     id = Column(Integer, primary_key=True, index=True)
     repo_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
     status = Column(String(20), default="pending")  # pending | running | completed | failed
+    commits_total = Column(Integer, default=0)
+    commits_done = Column(Integer, default=0)
     commits_scanned = Column(Integer, default=0)
     findings_count = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
